@@ -1,0 +1,459 @@
+openapi: 3.1.0
+info:
+  title: Zhengfang REST API
+  version: 1.0.0
+  description: English-named REST resources for the Zhengfang academic system.
+servers:
+  - url: http://localhost:3000/api/v1
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      summary: Check service health
+      responses:
+        '200':
+          description: Service is available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /sessions:
+    post:
+      operationId: createSession
+      summary: Sign in to the academic system
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignInRequest'
+      responses:
+        '201':
+          description: Signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
+        '202':
+          description: CAPTCHA required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaptchaChallengeResponse'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+  /sessions/captcha:
+    post:
+      operationId: completeCaptchaSignIn
+      summary: Complete sign-in with a CAPTCHA code
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CaptchaRequest'
+      responses:
+        '201':
+          description: Signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '410':
+          $ref: '#/components/responses/Problem'
+  /sessions/current:
+    delete:
+      operationId: revokeSession
+      summary: Revoke the current API session
+      security:
+        - bearerAuth: []
+      responses:
+        '204':
+          description: Session revoked
+        '401':
+          $ref: '#/components/responses/Problem'
+  /students/me:
+    get:
+      operationId: getCurrentStudent
+      summary: Get the current student's profile
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Student profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataResponse'
+        '401':
+          $ref: '#/components/responses/Problem'
+  /grades:
+    get:
+      operationId: listGrades
+      summary: List grades for an academic year
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AcademicYear'
+        - $ref: '#/components/parameters/Term'
+        - name: source
+          in: query
+          schema:
+            type: string
+            enum: [standard, personal]
+            default: standard
+      responses:
+        '200':
+          description: Grade list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataResponse'
+        '400':
+          $ref: '#/components/responses/Problem'
+  /exams:
+    get:
+      operationId: listExams
+      summary: List scheduled exams
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AcademicYear'
+        - $ref: '#/components/parameters/Term'
+      responses:
+        '200':
+          description: Exam schedule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataResponse'
+  /course-schedules:
+    get:
+      operationId: getCourseSchedule
+      summary: Get the weekly course schedule
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AcademicYear'
+        - $ref: '#/components/parameters/RequiredTerm'
+      responses:
+        '200':
+          description: Weekly course schedule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataResponse'
+  /course-schedules/pdf:
+    get:
+      operationId: downloadCourseSchedulePdf
+      summary: Download the course schedule as PDF
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AcademicYear'
+        - $ref: '#/components/parameters/RequiredTerm'
+        - name: name
+          in: query
+          schema:
+            type: string
+            default: Export
+      responses:
+        '200':
+          description: PDF document
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '422':
+          $ref: '#/components/responses/Problem'
+  /academic-record:
+    get:
+      operationId: getAcademicRecord
+      summary: Get academic progress and course requirements
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Academic record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataResponse'
+  /academic-record/pdf:
+    get:
+      operationId: downloadAcademicRecordPdf
+      summary: Download the academic record as PDF
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: PDF document
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+  /notifications:
+    get:
+      operationId: listNotifications
+      summary: List student notifications
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Notifications
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataResponse'
+  /grade-point-average:
+    get:
+      operationId: getGradePointAverage
+      summary: Get the current GPA
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: GPA value
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataResponse'
+  /course-enrollments:
+    get:
+      operationId: listCourseEnrollments
+      summary: List courses already enrolled in
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AcademicYear'
+        - $ref: '#/components/parameters/RequiredTerm'
+      responses:
+        '200':
+          description: Enrolled courses
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataResponse'
+    post:
+      operationId: createCourseEnrollment
+      summary: Enroll in a course class
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnrollmentRequest'
+      responses:
+        '201':
+          description: Enrollment request accepted by the academic system
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataResponse'
+        '400':
+          $ref: '#/components/responses/Problem'
+  /course-enrollments/available:
+    get:
+      operationId: listAvailableCourses
+      summary: List courses offered in an enrollment block
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AcademicYear'
+        - $ref: '#/components/parameters/RequiredTerm'
+        - name: block
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 3
+      responses:
+        '200':
+          description: Courses available to enroll in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataResponse'
+        '400':
+          $ref: '#/components/responses/Problem'
+  /course-enrollments/{courseId}:
+    delete:
+      operationId: deleteCourseEnrollment
+      summary: Withdraw from an enrolled course
+      description: This directly invokes the academic system withdrawal action; validate eligibility before use.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: executionId
+          in: query
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/AcademicYear'
+        - $ref: '#/components/parameters/RequiredTerm'
+      responses:
+        '200':
+          description: Withdrawal result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataResponse'
+        '400':
+          $ref: '#/components/responses/Problem'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  parameters:
+    AcademicYear:
+      name: academicYear
+      in: query
+      required: true
+      schema:
+        type: integer
+        minimum: 1900
+        maximum: 2200
+      example: 2024
+    Term:
+      name: term
+      in: query
+      required: false
+      description: Omit to query both terms when the academic system supports it.
+      schema:
+        type: integer
+        enum: [1, 2]
+    RequiredTerm:
+      name: term
+      in: query
+      required: true
+      schema:
+        type: integer
+        enum: [1, 2]
+  responses:
+    Problem:
+      description: Request failed
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            status:
+              type: string
+              const: ok
+          required: [status]
+      required: [data]
+    SignInRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+          format: password
+    SessionResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          required: [accessToken, tokenType, expiresAt]
+          properties:
+            accessToken:
+              type: string
+            tokenType:
+              type: string
+              const: Bearer
+            expiresAt:
+              type: string
+              format: date-time
+      required: [data]
+    CaptchaChallengeResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          required: [challengeId, image, mediaType, expiresAt]
+          properties:
+            challengeId:
+              type: string
+              format: uuid
+            image:
+              type: string
+              description: Base64-encoded CAPTCHA image.
+            mediaType:
+              type: string
+              const: image/png
+            expiresAt:
+              type: string
+              format: date-time
+      required: [data]
+    CaptchaRequest:
+      type: object
+      required: [challengeId, code]
+      properties:
+        challengeId:
+          type: string
+          format: uuid
+        code:
+          type: string
+    EnrollmentRequest:
+      type: object
+      required: [courseId, executionId, blockCode, academicYear, term]
+      properties:
+        courseId:
+          type: string
+        executionId:
+          type: string
+        blockCode:
+          type: string
+        academicYear:
+          type: integer
+        term:
+          type: integer
+          enum: [1, 2]
+    DataResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          description: Resource representation.
+    Problem:
+      type: object
+      required: [type, title, status, code, detail, instance]
+      properties:
+        type:
+          type: string
+          format: uri-reference
+        title:
+          type: string
+        code:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
