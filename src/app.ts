@@ -10,7 +10,9 @@ import { ZhengfangClient, type AcademicQuery } from "./services/zhengfang-client
 export interface AppConfig { baseUrl: string; timeoutMs: number; sessionTtlMs: number; }
 
 type AsyncHandler = (request: Request, response: Response, next: NextFunction) => Promise<void>;
+// Express 4 does not forward rejected async handlers automatically, so route errors go through the shared problem-response handler.
 const asyncRoute = (handler: AsyncHandler): RequestHandler => (request, response, next) => { void handler(request, response, next).catch(next); };
+// Keep successful JSON responses consistent across all REST resources.
 const success = (data: unknown) => ({ data });
 const integer = (value: unknown, label: string): number => {
   const parsed = typeof value === "number" ? value : Number.parseInt(String(value ?? ""), 10);
@@ -43,6 +45,7 @@ const bearerToken = (request: Request): string | null => {
   return match?.[1] ?? null;
 };
 
+// Routes expose REST resources while Zhengfang-specific URLs and form fields stay inside ZhengfangClient.
 export function createApp(config: AppConfig, sessions = new SessionStore(config.sessionTtlMs)) {
   const app = express();
   app.disable("x-powered-by");
@@ -70,6 +73,7 @@ export function createApp(config: AppConfig, sessions = new SessionStore(config.
     if (!challengeId || !code) throw new ApiError(400, "invalid_request", "challengeId and code are required.");
     const challenge = sessions.getChallenge(challengeId);
     if (!challenge) throw new ApiError(410, "challenge_expired", "The CAPTCHA challenge is missing or has expired.");
+    // Keep the challenge when validation fails so the caller can retry before its five-minute expiry.
     await challenge.client.completeCaptcha(challenge.challenge, code);
     sessions.removeChallenge(challengeId);
     const session = sessions.create(challenge.client);
@@ -185,6 +189,7 @@ export function createApp(config: AppConfig, sessions = new SessionStore(config.
       502: "Bad Gateway",
       504: "Gateway Timeout"
     };
+    // Serialize adapter errors as RFC-style problem details with a stable machine-readable code.
     response.status(apiError.status).type("application/problem+json").json({
       type: "about:blank",
       title: titles[apiError.status] ?? "Request Failed",

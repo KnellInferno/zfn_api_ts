@@ -167,6 +167,26 @@ Authorization: Bearer <accessToken>
 
 主要 HTTP 状态包括：`400` 请求参数无效、`401` 未认证或上游登录过期、`404` 路由不存在、`410` 验证码挑战失效、`422` 上游无法完成当前操作、`502` 上游错误、`504` 上游超时。
 
+### 旧项目自定义状态码的处理
+
+旧 Python 项目用自定义数字 `code` 表示验证码、登录失败、上游超时等业务结果。本 TypeScript 项目不再返回这些数字，而是使用 HTTP 状态码表达请求结果，并在 `application/problem+json` 的字符串 `code` 字段中提供稳定错误标识。查询无数据属于正常结果，不作为错误处理。
+
+| 旧状态码 | 旧含义 | 本项目的处理逻辑 |
+| --- | --- | --- |
+| `998` | 上游网页弹窗或未处理的提示内容 | 可识别的账号密码错误和验证码错误分别映射为 `401 invalid_credentials`、`400 invalid_captcha`；其他登录提示映射为 `422 login_rejected`。课表 PDF 错误页映射为 `422 pdf_export_failed`；学业成绩总表 PDF 无效则返回 `502 pdf_export_failed`。其他页面提示需在对应解析逻辑中显式识别。 |
+| `999` | 未知异常或未覆盖的逻辑错误 | 未识别的服务端异常返回 `500 internal_error`；已识别的故障优先返回更具体的错误码。 |
+| `1000` | 操作成功 | 使用 `2xx` HTTP 状态码；JSON 数据放入 `data`，PDF 接口直接返回 PDF 文件内容。 |
+| `1001` | 登录需要验证码 | `POST /api/v1/sessions` 返回 `202 Accepted`，并提供 `challengeId` 和 Base64 图片；用户将验证码提交到 `POST /api/v1/sessions/captcha`。 |
+| `1002` | 用户名或密码错误 | 返回 `401 Unauthorized`，错误标识为 `invalid_credentials`。 |
+| `1003` | 上游请求超时 | 返回 `504 Gateway Timeout`，错误标识为 `upstream_timeout`。 |
+| `1004` | 验证码错误 | 返回 `400 Bad Request`，错误标识为 `invalid_captcha`。挑战在 5 分钟有效期内仍可重试。 |
+| `1005` | 查询内容为空 | 列表查询返回 `200 OK` 和空集合（资源包含数量字段时 `count: 0`），不把“没有记录”当作系统错误。 |
+| `1006` | 上游 Cookie 失效或过期 | 识别到正方登录页时返回 `401 Unauthorized`，错误标识为 `session_expired`；客户端应重新创建登录会话。 |
+| `1007` | 上游接口失效，需要更新 | 本项目没有专用的 `1007` 状态。上游 JSON 无法解析时返回 `502 invalid_upstream_response`；检测到登录页或公钥字段变化时分别返回 `502 login_page_changed` 或 `502 login_key_unavailable`。 |
+| `2333` | 上游维护、服务被封禁或多次请求失败 | 本项目没有专用的维护/封禁状态码。网络不可达和上游非成功 HTTP 响应分别返回 `502 upstream_unavailable`、`502 upstream_error`；超时返回 `504 upstream_timeout`。若维护页面以 HTTP 200 返回，仍需根据具体学校页面增加识别逻辑。 |
+
+旧状态码及其定义见[原项目 README](https://github.com/openschoolcn/zfn_api#状态码)。上表描述本 TypeScript 项目的实际行为，不代表兼容返回旧数字状态码。
+
 ## 已知限制
 
 - 会话保存在当前进程内存中。多实例部署或进程重启后，需要接入共享持久化会话存储。

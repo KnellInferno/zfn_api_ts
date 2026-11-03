@@ -8,6 +8,7 @@ import type { LoginChallenge, ZhengfangClient } from "./zhengfang-client.js";
 export interface ApiSession { token: string; client: ZhengfangClient; expiresAt: number; }
 export interface CaptchaSession { id: string; client: ZhengfangClient; challenge: LoginChallenge; expiresAt: number; }
 
+// Sessions are process-local; use a shared store if this service runs with multiple replicas.
 export class SessionStore {
   private readonly sessions = new Map<string, ApiSession>();
   private readonly challenges = new Map<string, CaptchaSession>();
@@ -21,6 +22,7 @@ export class SessionStore {
   }
 
   createChallenge(client: ZhengfangClient, challenge: LoginChallenge): CaptchaSession {
+    // A challenge retains the upstream client and login context only until the user submits the CAPTCHA.
     const entry = { id: randomUUID(), client, challenge, expiresAt: Date.now() + 5 * 60_000 };
     this.challenges.set(entry.id, entry);
     return entry;

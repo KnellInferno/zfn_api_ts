@@ -10,6 +10,7 @@ const baseUrl = process.env.ZF_BASE_URL;
 const timeoutMs = Number.parseInt(process.env.ZF_TIMEOUT_MS ?? "8000", 10);
 const sessionTtlMinutes = Number.parseInt(process.env.API_SESSION_TTL_MINUTES ?? "240", 10);
 
+// Fail at startup so a misconfigured server cannot accept requests with invalid timing or network settings.
 if (!baseUrl) throw new Error("ZF_BASE_URL is required. Copy .env.example and configure your academic system URL.");
 if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("PORT must be between 1 and 65535.");
 if (!Number.isInteger(timeoutMs) || timeoutMs < 1000) throw new Error("ZF_TIMEOUT_MS must be at least 1000.");

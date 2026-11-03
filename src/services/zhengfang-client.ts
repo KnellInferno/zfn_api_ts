@@ -38,6 +38,7 @@ const parseDecimal = (value: unknown): number | null => {
   return Number.isFinite(parsed) ? Number(parsed.toFixed(1)) : null;
 };
 const textValue = (value: unknown): string | null => value === null || value === undefined || value === "" ? null : String(value);
+// Zhengfang encodes terms as 3 (term 1), 12 (term 2), and an empty string for a full-year query.
 const academicTermCode = (term?: number): string => term ? String(term * term * 3) : "";
 const valuesIn = (value: unknown): number[] => String(value ?? "").match(/\d+/g)?.map(Number) ?? [];
 const formatSessions = (value: unknown): number[] | null => {
@@ -81,6 +82,7 @@ export class ZhengfangClient {
 
   private cookieHeader(): string { return [...this.cookies].map(([name, value]) => name + "=" + value).join("; "); }
 
+  // Preserve cookies across the multi-request login flow and later API calls, as a browser session would.
   private captureCookies(headers: Headers): void {
     const getSetCookie = (headers as Headers & { getSetCookie?: () => string[] }).getSetCookie;
     const cookieLines = getSetCookie ? getSetCookie.call(headers) : [headers.get("set-cookie") ?? ""];
@@ -106,6 +108,7 @@ export class ZhengfangClient {
     if (cookie) headers.set("Cookie", cookie);
     let body: string | undefined;
     if (options.form) {
+      // The upstream still expects URL-encoded forms and legacy field names; keep that protocol at this boundary.
       const form = new URLSearchParams();
       for (const [key, value] of Object.entries(options.form)) if (value !== undefined) form.set(key, String(value));
       body = form.toString();
@@ -116,6 +119,7 @@ export class ZhengfangClient {
     let method = options.method ?? "GET";
     let requestBody = body;
     try {
+      // Follow only same-origin redirects so session cookies are never sent to another host.
       for (let redirectCount = 0; redirectCount <= 5; redirectCount++) {
         const cookieHeader = this.cookieHeader();
         if (cookieHeader) headers.set("Cookie", cookieHeader);
@@ -140,6 +144,7 @@ export class ZhengfangClient {
     const bytes = Buffer.from(await response.arrayBuffer());
     const text = bytes.toString("utf8");
     if (!response.ok) throw new ApiError(502, "upstream_error", "The academic system returned HTTP " + response.status + ".");
+    // Zhengfang often signals expired cookies by returning its login HTML with HTTP 200.
     if (!options.allowUnauthenticated && this.isLoginPage(text)) throw new ApiError(401, "session_expired", "The academic system session has expired. Sign in again.");
     return { status: response.status, text, bytes, contentType: response.headers.get("content-type") ?? "" };
   }
@@ -162,6 +167,7 @@ export class ZhengfangClient {
     const $ = load(html);
     const tip = $("p#tips").text().trim();
     if (!tip) return;
+    // Convert the old login-page messages into stable REST errors instead of exposing numeric legacy codes.
     if (tip.includes("验证码")) throw new ApiError(400, "invalid_captcha", "The CAPTCHA code is incorrect.");
     if (tip.includes("用户名") || tip.includes("密码")) throw new ApiError(401, "invalid_credentials", "The username or password is incorrect.");
     throw new ApiError(422, "login_rejected", tip);
@@ -176,6 +182,7 @@ export class ZhengfangClient {
     const modulus = textValue(key.modulus);
     const exponent = textValue(key.exponent);
     if (!modulus || !exponent) throw new ApiError(502, "login_key_unavailable", "The academic system did not provide a password encryption key.");
+    // Return a resumable challenge when this deployment requires a CAPTCHA; the credentials remain server-side.
     if ($("input#yzm").length > 0) {
       const image = await this.request("kaptcha", { allowUnauthenticated: true });
       return { kind: "captcha", image: image.bytes.toString("base64"), challenge: { username, password, csrfToken, modulus, exponent } };
@@ -288,6 +295,7 @@ export class ZhengfangClient {
        "queryModel.sortName": "",
        "queryModel.sortOrder": "asc",
        time: 0 }));
+    // An empty result is a valid query outcome, not an upstream failure; expose it as count: 0 and courses: [].
     const courses = asList(payload.items);
     return { academicYear: query.academicYear,
        term: query.term ?? null,
@@ -340,6 +348,7 @@ export class ZhengfangClient {
   async getCourseSchedule(query: AcademicQuery): Promise<Record<string, unknown>> {
     const payload = asRecord(await this.postJson("kbcx/xskbcx_cxXsKb.html?gnmkdm=N2151", { xnm: query.academicYear, xqm: academicTermCode(query.term) }));
     const student = asRecord(payload.xsxx);
+    // No scheduled courses for a term is represented by an empty collection, matching REST list-resource semantics.
     const rows = asList(payload.kbList);
     const courses = rows.map((item) => {
       const sessionNumbers = valuesIn(item.jc);
